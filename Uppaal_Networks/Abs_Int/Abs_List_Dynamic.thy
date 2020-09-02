@@ -1,13 +1,13 @@
-theory Abs_List
+theory Abs_List_Dynamic
   imports Main "HOL-Library.Lattice_Syntax"
 begin
 
 instantiation list :: (order) order
 begin
   fun less_eq_list :: "'a list \<Rightarrow> 'a list \<Rightarrow> bool" where
-    "less_eq_list [] _ \<longleftrightarrow> True" |
+    "less_eq_list _ [] \<longleftrightarrow> True" |
     "less_eq_list (a # as) (b # bs) \<longleftrightarrow> a \<le> b \<and> as \<le> bs" |
-    "less_eq_list (a # as) [] \<longleftrightarrow> False"
+    "less_eq_list [] (b # bs) \<longleftrightarrow> False"
 
   fun less_list :: "'a list \<Rightarrow> 'a list \<Rightarrow> bool" where
     "less_list a b \<longleftrightarrow> a \<le> b \<and> \<not> b \<le> a"
@@ -18,15 +18,21 @@ instance proof(standard, goal_cases)
 next
   case (3 x y z)
   then show ?case proof(induction x arbitrary: y z)
+    case Nil
+    then show ?case using less_eq_list.elims by blast
+  next
     case (Cons xa x)
     then show ?case proof(cases y)
+      case Nil
+      then show ?thesis using less_eq_list.elims Cons.prems by blast
+    next
       fix ya ys assume y: "y = ya # ys"
       from this Cons show ?thesis proof (cases z)
         fix za zs assume "z = za # zs"
         from this Cons y show ?thesis by auto
       qed simp
-    qed simp
-  qed simp
+    qed
+  qed
 next
   case (4 x y)
   then show ?case
@@ -34,15 +40,15 @@ next
     case Nil then show ?case using less_eq_list.elims(2) by blast
   next
     case (Cons xa xs)
-    from this(2) obtain ya ys where "y = ya # ys" using less_eq_list.elims(2) by blast
+    from this(2) obtain ya ys where "y = ya # ys" using less_eq_list.elims(2) Cons.prems by blast
     from this Cons.prems Cons.IH show ?case using dual_order.antisym by auto
   qed
 qed simp
 end
 
-instantiation list :: (order) order_bot
+instantiation list :: (order) order_top
 begin
-definition[simp]: "\<bottom> \<equiv> []"
+definition[simp]: "\<top> \<equiv> []"
 instance by (standard, simp)
 end
 
@@ -50,20 +56,24 @@ instantiation list :: (semilattice_sup) semilattice_sup
 begin
   fun sup_list :: "'a list \<Rightarrow> 'a list \<Rightarrow> 'a list" where
     "(a # as) \<squnion> (b # bs) = (a \<squnion> b) # (as \<squnion> bs)" |
-    "a \<squnion> [] = a" |
-    "[] \<squnion> b = b"
+    "a \<squnion> [] = []" |
+    "[] \<squnion> b = []"
 
 instance proof(standard, goal_cases)
   case (1 x y)
   then show ?case
   proof(induction x arbitrary: y)
+    case Nil
+    then show ?case
+      by (metis less_eq_list.simps(1) list.distinct(1) sup_list.elims)
+  next
     case (Cons a x)
     then show ?case
     proof (cases y)
       fix ya ys assume "y = ya # ys"
       then show ?thesis using Cons by simp
     qed simp
-  qed simp
+  qed
 next
   case (2 y x)
   then show ?case
@@ -88,10 +98,8 @@ next
 qed
 end
 
-instantiation list :: (bounded_semilattice_sup_bot) bounded_semilattice_sup_bot begin instance .. end
-
 fun \<gamma>_list :: "('a \<Rightarrow> 'b set) \<Rightarrow> 'a list \<Rightarrow> 'b list set" where
-  "\<gamma>_list _ [] = {[]}" |
+  "\<gamma>_list _ [] = \<top>" |
   "\<gamma>_list \<gamma>_word (a # as) = {l. \<exists>x xs. l = x # xs \<and> x \<in> \<gamma>_word a \<and> xs \<in> \<gamma>_list \<gamma>_word as} \<squnion> {[]}"
 
 lemma mono_gamma_list:
@@ -103,8 +111,11 @@ proof (induction a arbitrary: b)
   then show ?case by (induction b; simp)
 next
   case (Cons ax as)
-  from Cons.prems obtain bx bs where "b = bx # bs" using less_eq_list.elims(2) by blast
-  from this Cons show ?case using assms by fastforce
+  then show ?case proof (cases b)
+    fix bx bs assume "b = bx # bs"
+    then show "\<gamma>_list \<gamma>_word (ax # as) \<subseteq> \<gamma>_list \<gamma>_word b"
+      by (smt Collect_mono Cons.IH Cons.prems Un_mono \<gamma>_list.simps(2) assms less_eq_list.simps(2) subsetD subset_refl)
+  qed simp
 qed
 
 end
